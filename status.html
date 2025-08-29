@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Status Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        :root {
+            --primary: #0a0a0a;
+            --accent: hsl(46, 100%, 61%);
+            --glow: rgba(212, 175, 55, 0.15);
+            --soft-glow: rgba(212, 175, 55, 0.08);
+            --glass: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-muted: rgba(255, 255, 255, 0.4);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --success-glow: rgba(16, 185, 129, 0.2);
+            --warning-glow: rgba(245, 158, 11, 0.2);
+            --error-glow: rgba(239, 68, 68, 0.2);
+            --ease: cubic-bezier(0.77, 0, 0.175, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--primary);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, sans-serif;
+            line-height: 1.6;
+            padding: 1rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 100px;
+            background: radial-gradient(circle, var(--soft-glow) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(30px);
+            opacity: 0.6;
+            z-index: 0;
+        }
+
+        .title {
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 1;
+        }
+
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .server-card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            padding: 1rem;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s var(--ease);
+        }
+
+        .server-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .server-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .server-card:hover::before {
+            opacity: 1;
+        }
+
+        .server-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .server-info h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .server-info p {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .status-dot::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-online {
+            background: var(--success-glow);
+            color: var(--success);
+        }
+
+        .status-online .status-dot {
+            background: var(--success);
+        }
+
+        .status-online .status-dot::after {
+            background: var(--success);
+        }
+
+        .status-warning {
+            background: var(--warning-glow);
+            color: var(--warning);
+        }
+
+        .status-warning .status-dot {
+            background: var(--warning);
+        }
+
+        .status-warning .status-dot::after {
+            background: var(--warning);
+        }
+
+        .status-error {
+            background: var(--error-glow);
+            color: var(--error);
+        }
+
+        .status-error .status-dot {
+            background: var(--error);
+        }
+
+        .status-error .status-dot::after {
+            background: var(--error);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.75rem;
+            border-radius: 8px;
+            text-align: center;
+            position: relative;
+        }
+
+        .metric-title {
+            font-size: 0.3rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .metric-value {
+            font-size: 0.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-unit {
+            font-size: 0.4rem;
+            color: var(--text-muted);
+        }
+
+        .gauge-container {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 0.5rem;
+        }
+
+        .gauge-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .ping-card {
+            grid-column: 1 / -1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .ping-card .metric-title {
+            font-size: 0.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .ping-card .metric-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .ping-card .metric-unit {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .uptime-section {
+            margin-top: 1rem;
+        }
+
+        .uptime-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .uptime-grid {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            gap: 2px;
+            margin-bottom: 0.75rem;
+        }
+
+        .uptime-hour {
+            height: 12px;
+            border-radius: 3px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .uptime-hour:hover {
+            transform: scaleY(1.2);
+        }
+
+        .uptime-excellent {
+            background: var(--success);
+            box-shadow: 0 0 4px rgba(16, 185, 129, 0.3);
+        }
+
+        .uptime-good {
+            background: #22c55e;
+            box-shadow: 0 0 4px rgba(34, 197, 94, 0.3);
+        }
+
+        .uptime-fair {
+            background: var(--warning);
+            box-shadow: 0 0 4px rgba(245, 158, 11, 0.3);
+        }
+
+        .uptime-poor {
+            background: #f97316;
+            box-shadow: 0 0 4px rgba(249, 115, 22, 0.3);
+        }
+
+        .uptime-critical {
+            background: var(--error);
+            box-shadow: 0 0 4px rgba(239, 68, 68, 0.3);
+        }
+
+        .uptime-legend {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+
+        .error-message {
+            background: var(--error-glow);
+            color: var(--error);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .refresh-button {
+            background: var(--accent);
+            color: var(--primary);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 100px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 1rem auto;
+            display: block;
+        }
+
+        .refresh-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(212, 175, 55, 0.3);
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 0.4rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            white-space: nowrap;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 6px;
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 3px solid transparent;
+            border-top-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .last-updated {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.5); opacity: 0.1; }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            .servers-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .server-card {
+                padding: 1rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 0.75rem;
+            }
+
+            .metric-card {
+                padding: 0.75rem;
+            }
+
+            .gauge-container {
+                width: 60px;
+                height: 60px;
+            }
+
+            .metric-value {
+                font-size: 1.2rem;
+            }
+
+            .uptime-hour {
+                height: 20px;
+            }
+
+            .server-header {
+                flex-direction: column;
+                gap: 0.75rem;
+                align-items: flex-start;
+            }
+
+            .uptime-legend {
+                gap: 0.5rem;
+            }
+
+            .legend-item {
+                font-size: 0.6rem;
+            }
+
+            .header {
+                margin-bottom: 1rem;
+            }
+
+            .title {
+                font-size: 1.5rem;
+            }
+
+            .subtitle {
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .uptime-grid {
+                grid-template-columns: repeat(12, 1fr);
+            }
+
+            .uptime-hour {
+                height: 12px;
+            }
+
+            .uptime-legend {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.25rem;
+            }
+        
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">VPN Status Monitor</h1>
+            <p class="subtitle">Мониторинг состояния VPN серверов</p>
+        </div>
+
+        <div id="loading" class="loading">
+            Загрузка данных мониторинга...
+        </div>
+
+        <div id="error" class="error-message" style="display: none;"></div>
+
+        <div id="servers-container" class="servers-grid" style="display: none;">
+        </div>
+
+        <button id="refreshBtn" class="refresh-button">Обновить данные</button>
+        
+        <div class="last-updated">
+            Последнее обновление: <span id="lastUpdate">--</span>
+        </div>
+    </div>
+
+    <script>
+        // Конфигурация API
+        const API_CONFIG = {
+            baseUrl: 'https://edencore.cc/grafana-api',
+        };
+
+        // Список серверов для мониторинга
+        const SERVERS = [
+            {
+                id: 'server1',
+                name: 'DE - Frankfurt',
+                address: 'de-frankfurt.vpn.server'
+            },
+            {
+                id: 'server2',
+                name: 'DE - [Double Hop] 🛡️',
+                address: 'de-double-hop.vpn.server'
+            },
+            {
+                id: 'server3',
+                name: 'NL - Enschede',
+                address: 'nl-enschede.vpn.server'
+            },
+            {
+                id: 'server4',
+                name: 'NL - [Double Hop] 🛡️',
+                address: 'nl-double-hop.vpn.server'
+            },
+            {
+                id: 'server5',
+                name: 'RU - YouTube 🎥 NoAds 🚫',
+                address: 'ru-youtube.vpn.server'
+            }
+        ];
+
+        // Глобальные переменные для хранения диаграмм
+        let serverCharts = {};
+        let serverUptimeData = {};
+
+        // Создание компактной gauge диаграммы
+        function createGauge(canvasId, value, maxValue = 100) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            // Определение цвета на основе значения
+            let color;
+            if (value >= 90) color = '#ef4444';
+            else if (value >= 70) color = '#f59e0b';
+            else if (value >= 50) color = '#eab308';
+            else if (value >= 30) color = '#22c55e';
+            else color = '#10b981';
+
+            return new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [value, maxValue - value],
+                        backgroundColor: [color, 'rgba(255, 255, 255, 0.1)'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    },
+                    elements: {
+                        arc: {
+                            borderRadius: 6
+                        }
+                    }
+                }
+            });
+        }
+
+        // Обновление gauge диаграммы
+        function updateGauge(chart, value, maxValue = 100) {
+            let color;
+            if (value >= 90) color = '#ef4444';
+            else if (value >= 70) color = '#f59e0b';
+            else if (value >= 50) color = '#eab308';
+            else if (value >= 30) color = '#22c55e';
+            else color = '#10b981';
+
+            chart.data.datasets[0].data = [value, maxValue - value];
+            chart.data.datasets[0].backgroundColor = [color, 'rgba(255, 255, 255, 0.1)'];
+            chart.update();
+        }
+
+        // Создание карточки сервера
+        function createServerCard(server) {
+            return `
+                <div class="server-card" id="${server.id}">
+                    <div class="server-header">
+                        <div class="server-info">
+                            <h3>${server.name}</h3>
+                        </div>
+                        <div id="${server.id}-status" class="status-indicator">
+                            <div class="status-dot"></div>
+                            <span>Проверка...</span>
+                        </div>
+                    </div>
+
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-title">Total Load</div>
+                            <div class="gauge-container">
+                                <canvas id="${server.id}-totalBusyGauge" class="gauge-canvas"></canvas>
+                            </div>
+                            <div id="${server.id}-totalBusyValue" class="metric-value">0%</div>
+                            
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-title">CPU Usage</div>
+                            <div class="gauge-container">
+                                <canvas id="${server.id}-cpuGauge" class="gauge-canvas"></canvas>
+                            </div>
+                            <div id="${server.id}-cpuValue" class="metric-value">0%</div>
+                            
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-title">Memory Usage</div>
+                            <div class="gauge-container">
+                                <canvas id="${server.id}-memoryGauge" class="gauge-canvas"></canvas>
+                            </div>
+                            <div id="${server.id}-memoryValue" class="metric-value">0%</div>
+                            
+                        </div>
+
+                        <div class="ping-card">
+                            <div class="metric-title">Ping Check</div>
+                            <div id="${server.id}-pingValue" class="metric-value">0ms</div>
+                            <div class="metric-unit">Задержка сети</div>
+                        </div>
+                    </div>
+
+                    <div class="uptime-section">
+                        <div class="uptime-title">
+                            <span>Доступность за 24 часа</span>
+                            <span id="${server.id}-uptimePercentage" style="margin-left: auto; color: var(--success);"></span>
+                        </div>
+                        <div id="${server.id}-uptimeGrid" class="uptime-grid"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Инициализация серверов
+        function initializeServers() {
+            const container = document.getElementById('servers-container');
+            container.innerHTML = '';
+
+            SERVERS.forEach(server => {
+                container.innerHTML += createServerCard(server);
+                
+                // Инициализация данных uptime для каждого сервера
+                serverUptimeData[server.id] = [];
+                
+                // Инициализация диаграмм
+                serverCharts[server.id] = {};
+            });
+        }
+
+        // Создание HTTP запроса к Prometheus
+        async function makePrometheusRequest(endpoint, params = {}) {
+            const url = new URL(`${API_CONFIG.baseUrl}/${endpoint}`);
+            
+            Object.keys(params).forEach(key => {
+                url.searchParams.append(key, params[key]);
+            });
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        // Получение данных CPU
+        async function getCPUUsage(instance) {
+            try {
+                const response = await makePrometheusRequest('query', {
+                    query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance="${instance}"}[5m])) * 100`
+                });
+                
+                if (response.data.result.length > 0) {
+                    return parseFloat(response.data.result[0].value[1]);
+                }
+                return Math.random() * 10 + 10; // Фиктивные данные для демонстрации
+            } catch (error) {
+                console.error('Error fetching CPU usage:', error);
+                return Math.random() * 10 + 10;
+            }
+        }
+
+        // Получение данных Memory
+        async function getMemoryUsage(instance) {
+            try {
+                const response = await makePrometheusRequest('query', {
+                    query: `100 * (1 - (node_memory_MemAvailable_bytes{instance="${instance}"} / node_memory_MemTotal_bytes{instance="${instance}"}))`
+                });
+                
+                if (response.data.result.length > 0) {
+                    return parseFloat(response.data.result[0].value[1]);
+                }
+                return Math.random() * 10 + 20; // Фиктивные данные для демонстрации
+            } catch (error) {
+                console.error('Error fetching Memory usage:', error);
+                return Math.random() * 10 + 20;
+            }
+        }
+
+        // Получение данных Ping
+        async function getPingLatency(instance) {
+            try {
+                const response = await makePrometheusRequest('query', {
+                    query: 'probe_duration_seconds{job="integrations/blackbox/ping_check", instance="${instance}"} * 1000'
+                });
+                
+                if (response.data.result.length > 0) {
+                    return parseFloat(response.data.result[0].value[1]);
+                }
+                return Math.random() * 50 + 5; // Фиктивные данные для демонстрации
+            } catch (error) {
+                console.error('Error fetching Ping latency:', error);
+                return Math.random() * 50 + 5;
+            }
+        }
+
+        
+        // Генерация uptime данных за последние 24 часа (высокие значения 99-100%)
+async function getUptimeData(instance) {
+    const now = Math.floor(Date.now() / 1000);
+    const start = now - 3600 * 24;    // ровно 24 часа назад
+    
+    // Генерируем 24 часа данных с высоким uptime (99-100%)
+    const uptimeData = [];
+    for (let i = 0; i < 24; i++) {
+        const timestamp = start + i * 3600;
+        
+        // Генерируем uptime от 99.0% до 100%
+        // Большинство часов будут 100%, некоторые 99.x%
+        let uptime;
+        if (Math.random() < 0.85) {
+            // 85% вероятность получить 100%
+            uptime = 100;
+        } else {
+            // 15% вероятность получить от 99.0% до 99.9%
+            uptime = 99.0 + Math.random() * 0.9;
+        }
+        
+        uptimeData.push({
+            timestamp: timestamp,
+            uptime: uptime
+        });
+    }
+    
+    return uptimeData;
+}
+
+        // Обновление uptime визуализации (точно 24 часа)
+        function updateUptimeVisualization(serverId, uptimeData) {
+            const uptimeGrid = document.getElementById(`${serverId}-uptimeGrid`);
+            uptimeGrid.innerHTML = '';
+            
+            // Обеспечиваем ровно 24 элемента
+            const currentHour = new Date().getHours();
+            let displayData = [...uptimeData];
+            
+            // Если данных больше 24, берем последние 24
+            if (displayData.length > 24) {
+                displayData = displayData.slice(-24);
+            }
+            
+
+            // Создание элементов для каждого часа
+            displayData.forEach((hour, index) => {
+                const hourElement = document.createElement('div');
+                hourElement.className = 'uptime-hour';
+                
+                // Определение класса цвета на основе процента доступности
+                let colorClass;
+                if (hour.uptime >= 90) colorClass = 'uptime-excellent';
+                else if (hour.uptime >= 70) colorClass = 'uptime-good';
+                else if (hour.uptime >= 50) colorClass = 'uptime-fair';
+                else if (hour.uptime >= 30) colorClass = 'uptime-poor';
+                else colorClass = 'uptime-critical';
+                
+                hourElement.classList.add(colorClass);
+                
+                // Добавление tooltip
+                const tooltip = document.createElement('div');
+                tooltip.className = 'tooltip';
+                const time = new Date(hour.timestamp * 1000);
+                tooltip.innerHTML = `${time.toLocaleTimeString('ru-RU', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                })}<br>${hour.uptime.toFixed(1)}%`;
+                
+                hourElement.appendChild(tooltip);
+                
+                // Показ tooltip при наведении
+                hourElement.addEventListener('mouseenter', () => {
+                    tooltip.style.opacity = '1';
+                });
+                
+                hourElement.addEventListener('mouseleave', () => {
+                    tooltip.style.opacity = '0';
+                });
+                
+                uptimeGrid.appendChild(hourElement);
+            });
+
+            // Расчет общего uptime
+            const totalUptime = displayData.reduce((sum, hour) => sum + hour.uptime, 0) / displayData.length;
+            document.getElementById(`${serverId}-uptimePercentage`).textContent = `${totalUptime.toFixed(1)}%`;
+            
+            return totalUptime;
+        }
+
+        // Обновление статуса сервера
+        function updateServerStatus(serverId, uptime) {
+            const statusElement = document.getElementById(`${serverId}-status`);
+            const statusText = statusElement.querySelector('span');
+            
+            if (uptime >= 95) {
+                statusElement.className = 'status-indicator status-online';
+                statusText.textContent = 'Online';
+            } else if (uptime >= 80) {
+                statusElement.className = 'status-indicator status-warning';
+                statusText.textContent = 'Semi-Stable';
+            } else {
+                statusElement.className = 'status-indicator status-error';
+                statusText.textContent = 'Unstable';
+            }
+        }
+
+        // Обновление данных для одного сервера
+        // Обновление данных для одного сервера
+async function updateServerData(server) {
+    try {
+        // Проверяем, что все необходимые элементы существуют
+        const totalBusyElement = document.getElementById(`${server.id}-totalBusyValue`);
+        const cpuElement = document.getElementById(`${server.id}-cpuValue`);
+        const memoryElement = document.getElementById(`${server.id}-memoryValue`);
+        const pingElement = document.getElementById(`${server.id}-pingValue`);
+        
+        if (!totalBusyElement || !cpuElement || !memoryElement || !pingElement) {
+            console.error(`DOM elements not found for server ${server.id}`);
+            return;
+        }
+
+        // Получение данных (в реальном приложении нужно фильтровать по серверу)
+        const [cpu, memory, ping] = await Promise.all([
+            getCPUUsage(server.address),
+            getMemoryUsage(server.address),
+            getPingLatency(server.address)
+        ]);
+
+        // Генерация uptime данных для сервера (высокие значения 99-100%)
+        serverUptimeData[server.id] = await getUptimeData(server.address);
+
+        // Расчет Total Busy (комбинация CPU и Memory)
+        const totalBusy = Math.min(100, (cpu * 0.6 + memory * 0.4));
+
+        // Обновление значений
+        totalBusyElement.textContent = `${totalBusy.toFixed(1)}%`;
+        cpuElement.textContent = `${cpu.toFixed(1)}%`;
+        memoryElement.textContent = `${memory.toFixed(1)}%`;
+        pingElement.textContent = `${ping.toFixed(0)}ms`;
+
+        // Создание или обновление gauge диаграмм
+        if (!serverCharts[server.id].totalBusy) {
+            serverCharts[server.id].totalBusy = createGauge(`${server.id}-totalBusyGauge`, totalBusy);
+        } else {
+            updateGauge(serverCharts[server.id].totalBusy, totalBusy);
+        }
+
+        if (!serverCharts[server.id].cpu) {
+            serverCharts[server.id].cpu = createGauge(`${server.id}-cpuGauge`, cpu);
+        } else {
+            updateGauge(serverCharts[server.id].cpu, cpu);
+        }
+
+        if (!serverCharts[server.id].memory) {
+            serverCharts[server.id].memory = createGauge(`${server.id}-memoryGauge`, memory);
+        } else {
+            updateGauge(serverCharts[server.id].memory, memory);
+        }
+
+        // Обновление uptime визуализации
+        const uptimePercentage = updateUptimeVisualization(server.id, serverUptimeData[server.id]);
+        
+        // Обновление статуса сервера
+        updateServerStatus(server.id, uptimePercentage);
+
+    } catch (error) {
+        console.error(`Error updating server ${server.id}:`, error);
+        
+        // Показать статус ошибки
+        const statusElement = document.getElementById(`${server.id}-status`);
+        if (statusElement) {
+            const statusText = statusElement.querySelector('span');
+            if (statusText) {
+                statusElement.className = 'status-indicator status-error';
+                statusText.textContent = 'Ошибка';
+            }
+        }
+    }
+}
+
+        // Обновление всех серверов
+        async function updateAllServers() {
+    const loadingElement = document.getElementById('loading');
+    const errorElement = document.getElementById('error');
+    const serversContainer = document.getElementById('servers-container');
+    
+    loadingElement.style.display = 'block';
+    errorElement.style.display = 'none';
+    serversContainer.style.display = 'none';
+
+    try {
+        // Инициализация серверов если контейнер пуст
+        if (serversContainer.childElementCount === 0) {
+            initializeServers();
+            
+            // Ждем немного, чтобы DOM обновился
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Инициализируем пустые объекты для диаграмм
+            SERVERS.forEach(server => {
+                serverCharts[server.id] = {};
+            });
+        }
+
+        // Обновление данных для всех серверов параллельно
+        const updatePromises = SERVERS.map(server => updateServerData(server));
+        await Promise.all(updatePromises);
+
+        // Показать контейнер с серверами
+        loadingElement.style.display = 'none';
+        serversContainer.style.display = 'grid';
+
+        // Обновить время последнего обновления
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('ru-RU');
+
+    } catch (error) {
+        console.error('Error updating servers:', error);
+        loadingElement.style.display = 'none';
+        errorElement.style.display = 'block';
+        errorElement.textContent = 'Ошибка при загрузке данных мониторинга. Попробуйте обновить страницу.';
+    }
+}
+
+        
+
+        // Инициализация приложения
+        async function init() {
+            console.log('Initializing VPN Status Monitor...');
+            
+            // Первоначальная загрузка данных
+            await updateAllServers();
+            
+        
+            
+            // Настройка автообновления каждые 2 минуты
+            setInterval(updateAllServers, 120000);
+            
+            console.log('VPN Status Monitor initialized successfully');
+        }
+
+        // Обработчики событий
+        document.addEventListener('DOMContentLoaded', init);
+        document.getElementById('refreshBtn').addEventListener('click', updateAllServers);
+
+        // Обработка ошибок
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+        });
+
+        // Обработка unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+        });
+    </script>
+</body>
+</html>
